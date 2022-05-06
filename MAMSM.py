@@ -137,9 +137,8 @@ class MyDataSet(Data.Dataset):
 
 def get_attn_pad_mask(seq_q, seq_k):
     batch_size, seq_len = seq_q.size()
-    # eq(zero) is PAD token
-    pad_attn_mask = seq_q.data.eq(0).unsqueeze(1)  # [batch_size, 1, seq_len]
-    return pad_attn_mask.expand(batch_size, seq_len, seq_len)  # [batch_size, seq_len, seq_len]
+    pad_attn_mask = seq_q.data.eq(0).unsqueeze(1)
+    return pad_attn_mask.expand(batch_size, seq_len, seq_len)
 
 
 def gelu(x):
@@ -156,15 +155,15 @@ class Embedding(nn.Module):
     def __init__(self):
         super(Embedding, self).__init__()
         self.device = device
-        self.tok_embed = nn.Embedding(vocab_size, d_model)  # token embedding
-        self.pos_embed = nn.Embedding(maxlen, d_model)  # position embedding
-        self.seg_embed = nn.Embedding(n_segments, d_model)  # segment(token type) embedding
+        self.tok_embed = nn.Embedding(vocab_size, d_model)
+        self.pos_embed = nn.Embedding(maxlen, d_model)
+        self.seg_embed = nn.Embedding(n_segments, d_model)
         self.norm = nn.LayerNorm(d_model)
 
     def forward(self, x, seg):
         seq_len = x.size(1)
         pos = torch.arange(seq_len, dtype=torch.long)
-        pos = pos.unsqueeze(0).expand_as(x)  # [seq_len] -> [batch_size, seq_len]
+        pos = pos.unsqueeze(0).expand_as(x)
         pos = pos.to(device)
         embedding = self.tok_embed(x) + self.pos_embed(pos) + self.seg_embed(seg)
         embedding = embedding.to(device)
@@ -178,8 +177,8 @@ class ScaledDotProductAttention(nn.Module):
         self.device = device
 
     def forward(self, Q, K, V, attn_mask):
-        scores = torch.matmul(Q, K.transpose(-1, -2)) / np.sqrt(d_k)  # scores : [batch_size, n_heads, seq_len, seq_len]
-        scores.masked_fill_(attn_mask, -1e9)  # Fills elements of self tensor with value where mask is one.
+        scores = torch.matmul(Q, K.transpose(-1, -2)) / np.sqrt(d_k)
+        scores.masked_fill_(attn_mask, -1e9)
         attn = nn.Softmax(dim=-1)(scores)
         context = torch.matmul(attn, V)
 
@@ -198,27 +197,23 @@ class MultiHeadAttention(nn.Module):
         self.LayerNorm = nn.LayerNorm(d_model)
 
     def forward(self, Q, K, V, attn_mask):
-        # q: [batch_size, seq_len, d_model], k: [batch_size, seq_len, d_model], v: [batch_size, seq_len, d_model]
+
         residual, batch_size = Q, Q.size(0)
-        # (B, S, D) -proj-> (B, S, D) -split-> (B, S, H, W) -trans-> (B, H, S, W)
-        q_s = self.W_Q(Q).view(batch_size, -1, n_heads, d_k).transpose(1, 2)  # q_s: [batch_size, n_heads, seq_len, d_k]
-        k_s = self.W_K(K).view(batch_size, -1, n_heads, d_k).transpose(1, 2)  # k_s: [batch_size, n_heads, seq_len, d_k]
-        v_s = self.W_V(V).view(batch_size, -1, n_heads, d_v).transpose(1, 2)  # v_s: [batch_size, n_heads, seq_len, d_v]
+        q_s = self.W_Q(Q).view(batch_size, -1, n_heads, d_k).transpose(1, 2)
+        k_s = self.W_K(K).view(batch_size, -1, n_heads, d_k).transpose(1, 2)
+        v_s = self.W_V(V).view(batch_size, -1, n_heads, d_v).transpose(1, 2)
 
         attn_mask = attn_mask.unsqueeze(1).repeat(1, n_heads, 1,
-                                                  1)  # attn_mask : [batch_size, n_heads, seq_len, seq_len]
+                                                  1)
 
-        # context: [batch_size, n_heads, seq_len, d_v], attn: [batch_size, n_heads, seq_len, seq_len]
         context, attn = ScaledDotProductAttention()(q_s, k_s, v_s, attn_mask)
         attv = context
 
         context = context.transpose(1, 2).contiguous().view(batch_size, -1,
-                                                            n_heads * d_v)  # context: [batch_size, seq_len, n_heads, d_v]
+                                                            n_heads * d_v)
         output = self.linear(context)
         attliner = output
         out = self.LayerNorm(output + residual)
-
-        # return nn.LayerNorm(d_model)(output + residual)  # output: [batch_size, seq_len, d_model]
         return out, attn,attv,attliner
 
 
@@ -231,11 +226,9 @@ class PoswiseFeedForwardNet(nn.Module):
         self.fc2 = nn.Linear(d_ff, d_model)
 
     def forward(self, x):
-        # (batch_size, seq_len, d_model) -> (batch_size, seq_len, d_ff) -> (batch_size, seq_len, d_model)
         a = self.fc1(x)
         b = gelu(a)
         c = self.fc2(b)
-        # return self.fc2(gelu(self.fc1(x)))
         return c
 
 
@@ -280,13 +273,10 @@ class BERT(nn.Module):
         enc_self_attn_mask = get_attn_pad_mask(input_ids, input_ids)
         for layer in self.layers:
             output, attention_output, enc_self_attn,attv,attliner = layer(output, enc_self_attn_mask)
-        # output : [batch_size, len, d_model], attn : [batch_size, n_heads, d_mode, d_model]
-        # it will be decided by first token(CLS)
         h_pooled = self.activ1(self.fc(output[:, 0]))  # [batch_size, d_model]
         logits_clsf = self.classifier(h_pooled)  # [batch_size, 2]
 
         masked_pos = masked_pos[:, :, None].expand(-1, -1, output.size(-1))  # [batch_size, max_pred, d_model]
-        # get masked position from final output of transformer.
         h_masked = torch.gather(output, 1, masked_pos)  # masking position [batch_size, max_pred, d_model]\
 
         h_masked = self.norm(self.activ2(self.linear(h_masked)))
