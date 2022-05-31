@@ -8,7 +8,6 @@ import nilearn
 from nilearn.input_data import NiftiMasker
 import numpy as np
 import nibabel as nib
-import numpy as np
 import pandas as pd
 import re
 import math
@@ -21,7 +20,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as Data
 import matplotlib.pyplot as plt
-import numpy as np
 
 def normalization(data):
     range = np.max(data) - np.min(data)
