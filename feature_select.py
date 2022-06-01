@@ -89,7 +89,7 @@ for epoch in range(EPOCH):
         loss_line = loss_cos(encoded.T[0:12,:],int_line.T[0:12,:],target_line)
         optimizer.zero_grad()
 
-        loss_all = loss + loss_line
+        loss_all = loss + loss_line*10
         loss_all.backward()
 
         optimizer.step()
