@@ -297,7 +297,7 @@ if __name__ == '__main__':
 
 
     img = nib.load('group_data/100206/tfMRI_MOTOR_LR.nii.gz')
-    mask_imgback = nib.load('ADHD200_mask_152_4mm.nii.gz')
+    mask_imgback = nib.load('back_mask.nii.gz')
 
     masker = NiftiMasker(mask_img=mask_imgback)
     inputdata2d = masker.fit_transform(img) 
@@ -315,7 +315,7 @@ if __name__ == '__main__':
     list_test1 = normalinput2d.tolist()
     sentences = list_test1
     print(len(list_test1))
-    list_test2 = normalinput2d.reshape(284*28546).tolist()
+    list_test2 = normalinput2d.reshape(284*34059).tolist()
     word_list = list(set(list_test2))
 
     word2idx = {'[PAD]': 0, '[CLS]': 1, '[SEP]': 2, '[MASK]': 3}
@@ -331,10 +331,10 @@ if __name__ == '__main__':
         token_list.append(arr)
 
     # Proprecessing Finished
-    train_list = range(28546)
+    train_list = range(34059)
     train_list = [i for i in train_list]
 
-    pre_list = range(2800)
+    pre_list = range(3000)
     pre_list = [i * 10 for i in pre_list]
  
     batch = []
@@ -459,7 +459,7 @@ for j in tqdm(range(57)):
     enc_self_attn0 = np.load('group_data/100206/enc_self_attn_cls' + str(j+1) +'.npy')
     enc_self_attn_final = np.concatenate((enc_self_attn_final, enc_self_attn0), axis=0)
     del enc_self_attn0
-av_data = enc_self_attn_final.reshape(28546 * 6, 286)
+av_data = enc_self_attn_final.reshape(34059 * 6, 286)
 np.save('group_data/100206/2d_data_286.npy', av_data)
 print(av_data.shape)
 av_data = av_data[:, 1:285]
